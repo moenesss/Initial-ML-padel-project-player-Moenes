@@ -1,11 +1,7 @@
-streamlit
+flask
+flask-cors
 pandas
 numpy
 scikit-learn
-plotly
-matplotlib
-seaborn
-sqlalchemy
-psycopg2-binary
-imbalanced-learn
-scipy
+joblib
+mlflow

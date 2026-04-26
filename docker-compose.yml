@@ -1,0 +1,74 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# docker-compose.yml — Padel Analytics · Full Stack
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Services:
+#   - flask_api  → ML API on http://localhost:5000
+#   - mlflow     → MLflow UI on http://localhost:5001
+#   - n8n        → Workflow automation on http://localhost:5678
+#
+# Start everything:   docker-compose up -d
+# Stop everything:    docker-compose down
+# View logs:          docker-compose logs -f flask_api
+# ══════════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── Flask ML API ────────────────────────────────────────────────────────────
+  flask_api:
+    build: .                          # builds from your Dockerfile
+    container_name: padel_flask_api
+    restart: always
+    ports:
+      - "5000:5000"                   # Flask API → http://localhost:5000
+    volumes:
+      - ./models:/app/models          # models folder persists on your disk
+      - ./mlruns:/app/mlruns          # MLflow runs persist on your disk
+      - ./players_clean.csv:/app/players_clean.csv  # data file
+    environment:
+      - FLASK_ENV=production
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── MLflow UI ───────────────────────────────────────────────────────────────
+  mlflow:
+    image: python:3.12-slim
+    container_name: padel_mlflow
+    restart: always
+    ports:
+      - "5001:5001"                   # MLflow UI → http://localhost:5001
+    volumes:
+      - ./mlruns:/mlruns              # reads the same mlruns folder
+    command: >
+      sh -c "pip install mlflow --quiet &&
+             mlflow ui --host 0.0.0.0 --port 5001 --backend-store-uri /mlruns"
+    depends_on:
+      - flask_api
+
+  # ── n8n Workflow Automation ─────────────────────────────────────────────────
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: n8n
+    restart: always
+    ports:
+      - "5678:5678"                   # n8n UI → http://localhost:5678
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=UTC
+      - TZ=UTC
+      - N8N_ENCRYPTION_KEY=your_strong_encryption_key_here
+      # Tell n8n to reach Flask via Docker service name (not localhost)
+      - FLASK_API_URL=http://flask_api:5000
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - flask_api
+
+volumes:
+  n8n_data:
